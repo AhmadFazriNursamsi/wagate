@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { rm } from "node:fs/promises";
+import path from "node:path";
 import qrcode from "qrcode-terminal";
 import { Client, LocalAuth, MessageMedia } from "whatsapp-web.js";
 import { env } from "../../env";
@@ -51,7 +54,19 @@ export class WagateClient {
     );
   }
 
+  private async clearChromiumLocks() {
+    const sessionDir = path.resolve(
+      ".wwebjs_auth",
+      `session-${this.clientId}`,
+    );
+    if (!existsSync(sessionDir)) return;
+    for (const name of ["SingletonLock", "SingletonCookie", "SingletonSocket"]) {
+      await rm(path.join(sessionDir, name), { force: true }).catch(() => {});
+    }
+  }
+
   async init() {
+    await this.clearChromiumLocks();
     logger.info(`[${this.clientId}] Initializing — waiting for QR scan...`);
 
     return new Promise<void>((resolve, reject) => {
