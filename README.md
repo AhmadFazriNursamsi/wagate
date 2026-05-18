@@ -130,6 +130,34 @@ Send media file. Body (`multipart/form-data`):
 { "status": "success", "code": 200, "message": "Message queued for delivery", "data": { ... } }
 ```
 
+### Examples
+
+Health check:
+
+```bash
+curl http://localhost:3000/api/v1/ \
+  -H "x-api-key: $SECRET_KEY"
+```
+
+Send text:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/send/ \
+  -H "x-api-key: $SECRET_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"number":"628xxxxxxxxxx","content":"Hello from wagate"}'
+```
+
+Send media (with caption):
+
+```bash
+curl -X POST http://localhost:3000/api/v1/send/media \
+  -H "Authorization: Bearer $SECRET_KEY" \
+  -F "number=628xxxxxxxxxx" \
+  -F "content=Invoice attached" \
+  -F "file=@./invoice.pdf"
+```
+
 ---
 
 ## Deployment Guide
