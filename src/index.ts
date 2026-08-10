@@ -43,6 +43,39 @@ const app = new Elysia()
       message,
     };
   })
+  .get("/qr", ({ set }) => {
+    set.headers["content-type"] = "text/html; charset=utf-8";
+    const qr1 = client1.qrCode;
+    const qr2 = client2.qrCode;
+    
+    if (!qr1 && !qr2) {
+      return `<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#111;color:#eee;">
+        <h2>Status QR WhatsApp</h2>
+        <p style="color:#aaa;">Belum ada QR Code (mungkin bot sudah terhubung / connected).</p>
+      </body></html>`;
+    }
+    
+    return `<!DOCTYPE html><html>
+      <head>
+        <title>Scan QR WhatsApp Gateway</title>
+        <meta http-equiv="refresh" content="5">
+      </head>
+      <body style="font-family:sans-serif;text-align:center;padding:30px;background:#111;color:#eee;">
+        <h2>Scan QR Code WhatsApp Gateway (Dual-Client Anti-Ban)</h2>
+        <p style="color:#aaa;font-size:14px;">Halaman ini akan diperbarui otomatis setiap 5 detik.</p>
+        <div style="display:flex;justify-content:center;gap:40px;flex-wrap:wrap;margin-top:20px;">
+          <div>
+            <h3>Client 1 (Main Account)</h3>
+            ${qr1 ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr1)}" style="border:10px solid white;border-radius:10px;" />` : '<p style="color:#4CAF50;font-weight:bold;">✅ Client 1 Terhubung (Connected)</p>'}
+          </div>
+          <div>
+            <h3>Client 2 (Secondary Account)</h3>
+            ${qr2 ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr2)}" style="border:10px solid white;border-radius:10px;" />` : '<p style="color:#4CAF50;font-weight:bold;">✅ Client 2 Terhubung (Connected)</p>'}
+          </div>
+        </div>
+      </body>
+    </html>`;
+  })
   .onBeforeHandle({ as: "global" }, ({ request, set }) => {
     // Cache-control header (replaces Express CacheMiddleware)
     const period = 60 * 60; // 1 hour
@@ -75,22 +108,26 @@ logger.info(`🚀 Server running on port ${env.PORT}`);
 (async () => {
   try {
     logger.info("═══════════════════════════════════════════════");
-    logger.info("[startup] Initializing Client 1 (Main)...");
+    logger.info("[startup] Initializing Client 1 & Client 2 concurrently...");
     logger.info("═══════════════════════════════════════════════");
-    await client1.init();
-    logger.info("[startup] ✅ Client 1 is ready!");
+    await Promise.allSettled([
+      client1.init().catch((e) => logger.error(`[startup] Client 1 init error: ${e}`)),
+      client2.init().catch((e) => logger.error(`[startup] Client 2 init error: ${e}`)),
+    ]);
 
     logger.info("");
-    logger.info("═══════════════════════════════════════════════");
-    logger.info("[startup] Initializing Client 2 (Secondary)...");
-    logger.info("═══════════════════════════════════════════════");
-    await client2.init();
-    logger.info("[startup] ✅ Client 2 is ready!");
+    logger.info("[startup] Verifying and linking partner contacts...");
+    if (client1.phoneNumber) {
+      client2.partnerNumber = client1.phoneNumber;
+      logger.info(`[startup] 📱 Client 2 partner set to Client 1 number: ${client1.phoneNumber}`);
+    }
+    if (client2.phoneNumber) {
+      client1.partnerNumber = client2.phoneNumber;
+      logger.info(`[startup] 📱 Client 1 partner set to Client 2 number: ${client2.phoneNumber}`);
+    }
 
-    logger.info("");
-    logger.info("[startup] Verifying partner contacts...");
-    await client1.saveContact(env.WA2_NUMBER);
-    await client2.saveContact(env.WA1_NUMBER);
+    if (client1.partnerNumber) await client1.saveContact(client1.partnerNumber);
+    if (client2.partnerNumber) await client2.saveContact(client2.partnerNumber);
 
     logger.info("═══════════════════════════════════════════════");
     logger.info("[startup] ✅ Both clients ready — WA-GATE is live");
@@ -104,6 +141,7 @@ logger.info(`🚀 Server running on port ${env.PORT}`);
     });
   }
 })();
+
 
 // ─── Global Error Handlers ───────────────────────────────────────
 process.once("unhandledRejection", async (reason) => {

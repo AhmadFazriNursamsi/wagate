@@ -13,10 +13,12 @@ import { Helper } from "../helper/util";
 
 export class WagateClient {
   client: Client;
+  public qrCode: string | null = null;
+  public phoneNumber: string = "";
 
   constructor(
     public readonly clientId: string,
-    public readonly partnerNumber: string = "",
+    public partnerNumber: string = "",
     private helper = new Helper(),
   ) {
     this.client = new Client({
@@ -24,13 +26,26 @@ export class WagateClient {
       webVersion: WHATSAPP_WEB_BUILD_VERSION,
       webVersionCache: { type: "none" },
       puppeteer: {
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        ...(process.env.PUPPETEER_EXECUTABLE_PATH
+          ? { executablePath: process.env.PUPPETEER_EXECUTABLE_PATH }
+          : {}),
+        args: [
+          "--no-sandbox",
+          "--disable-setuid-sandbox",
+          "--disable-dev-shm-usage",
+          "--disable-accelerated-2d-canvas",
+          "--no-first-run",
+          "--no-zygote",
+          "--disable-gpu",
+          "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        ],
       },
     });
 
     this.client.on("qr", (qr) => this.onQR(qr));
     this.client.on("ready", () => this.onReady());
     this.client.on("authenticated", () => {
+      this.qrCode = null;
       logger.info(`[${this.clientId}] ✅ Authenticated successfully`);
     });
     this.client.on("auth_failure", (msg) => {
@@ -42,12 +57,17 @@ export class WagateClient {
   }
 
   private onQR(qr: string) {
+    this.qrCode = qr;
     logger.info(`[${this.clientId}] Scan this QR code:`);
     qrcode.generate(qr, { small: true });
   }
 
   private async onReady() {
-    logger.info(`[${this.clientId}] ✅ WHATSAPP BOT IS RUNNING`);
+    this.qrCode = null;
+    if (this.client.info?.wid?.user) {
+      this.phoneNumber = this.client.info.wid.user;
+    }
+    logger.info(`[${this.clientId}] ✅ WHATSAPP BOT IS RUNNING (${this.phoneNumber || "unknown"})`);
     logger.info(`[${this.clientId}] WWJS: ${WHATSAPP_WEB_VERSION}`);
     logger.info(
       `[${this.clientId}] Web version: ${WHATSAPP_WEB_BUILD_VERSION}`,
@@ -107,6 +127,23 @@ export class WagateClient {
   async saveContact(number: string) {
     try {
       const contactId = `${number}@c.us`;
+      try {
+        await (this.client as any).saveOrEditAddressbookContact(contactId, `Partner ${number}`, "");
+      } catch {
+        // ignore if addressbook save isn't supported
+      }
+      // Pre-warm LID cache by forcing chat creation in WhatsApp Web internal store
+      // This ensures addAndSendMsgToChat can resolve LID when we send messages later
+      await (this.client as any).pupPage.evaluate(async (targetId: string) => {
+        try {
+          // enforceLidAndPnRetrieval fetches LID from WhatsApp servers via QueryExist
+          await (window as any).WWebJS.enforceLidAndPnRetrieval(targetId);
+          // findOrCreateLatestChat ensures the chat model exists in memory
+          await (window as any).WWebJS.getChat(targetId, { getAsModel: false });
+        } catch (e) {
+          // non-fatal
+        }
+      }, contactId);
       const contact = await this.client.getContactById(contactId);
       if (contact) {
         logger.info(
@@ -141,7 +178,7 @@ export class WagateClient {
   async markAsRead(number: string) {
     try {
       await new Promise((r) => setTimeout(r, 1000));
-      const chatId = `${number}@c.us`;
+      const chatId = await this.getJid(number);
       const chat = await this.client.getChatById(chatId);
       await chat.sendSeen();
       logger.debug(`[${this.clientId}] 👁️ Marked chat ${number} as read`);
@@ -150,19 +187,50 @@ export class WagateClient {
     }
   }
 
+  private async getJid(number: string): Promise<string> {
+    const cleaned = number.replace(/\D/g, "");
+    try {
+      const numberId = await this.client.getNumberId(cleaned);
+      if (numberId) {
+        return numberId._serialized;
+      }
+    } catch (e) {
+      // fallback
+    }
+    return `${cleaned}@c.us`;
+  }
+
   async sendMsg(msg: string, to: string) {
     await this.helper.delay();
-    const chatId = `${to}@c.us`;
+    const chatId = await this.getJid(to);
     await this.sendTyping(chatId);
-    logger.info(`[${this.clientId}] 📤 Sending text to ${to}`);
-    await this.client.sendMessage(chatId, msg);
+    logger.info(`[${this.clientId}] 📤 Sending text to ${to} (${chatId})`);
+    try {
+      await this.client.sendMessage(chatId, msg);
+    } catch (err: any) {
+      if (err?.message?.includes("No LID")) {
+        logger.warn(`[${this.clientId}] LID missing for ${chatId}, resolving LID address via getContactLidAndPhone...`);
+        const cleaned = to.replace(/\D/g, "");
+        const lidResults = await (this.client as any).getContactLidAndPhone(cleaned);
+        const lidId = lidResults?.[0]?.lid;
+        if (lidId) {
+          logger.info(`[${this.clientId}] Sending via LID address: ${lidId}`);
+          await this.client.sendMessage(lidId, msg);
+        } else {
+          logger.warn(`[${this.clientId}] No LID returned for ${chatId}, falling back to @c.us`);
+          throw err;
+        }
+      } else {
+        throw err;
+      }
+    }
   }
 
   async sendFile(msg: string = "", to: string, filePath: string) {
     await this.helper.delay();
-    const chatId = `${to}@c.us`;
+    const chatId = await this.getJid(to);
     await this.sendTyping(chatId);
-    logger.info(`[${this.clientId}] 📤 Sending media to ${to}`);
+    logger.info(`[${this.clientId}] 📤 Sending media to ${to} (${chatId})`);
     const messageMedia = MessageMedia.fromFilePath(filePath);
     await this.client.sendMessage(chatId, messageMedia, {
       caption: msg,
