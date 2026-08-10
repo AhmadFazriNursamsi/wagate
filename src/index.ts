@@ -42,7 +42,7 @@ const app = new Elysia()
             const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
             const res = await fetch(url, {
-              method: "GET",
+              method: "POST",
               headers: { "User-Agent": "Wagate-Cron/1.0" },
               signal: controller.signal,
             });
