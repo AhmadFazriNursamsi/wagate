@@ -35,7 +35,7 @@ const app = new Elysia()
             return;
           }
           isCatuCronRunning = true;
-          const url = "https://apps.catu.id/CATUNewJavaStagingDev/rest/cronparamsromo";
+          const url = env.CATU_CRON_URL;
           logger.info(`[cron-catu] 🔄 Triggering CATU cron: ${url}`);
           try {
             const controller = new AbortController();

@@ -8,6 +8,7 @@ const EnvSchema = z.object({
   WA2_NUMBER: z.string().optional().default(""),
   DISPLAY_NAME_1: z.string().optional(),
   DISPLAY_NAME_2: z.string().optional(),
+  CATU_CRON_URL: z.string().url().optional().default("https://apps.catu.id/CATUJavaProd/rest/cronparamsromo"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
