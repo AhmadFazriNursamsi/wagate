@@ -23,6 +23,46 @@ const app = new Elysia()
       },
     }),
   )
+  .use(() => {
+    let isCatuCronRunning = false;
+    return new Elysia().use(
+      cron({
+        name: "catu-cron-params-romo",
+        pattern: "*/1 * * * *", // Every 1 minute
+        async run() {
+          if (isCatuCronRunning) {
+            logger.warn("[cron-catu] ⚠️ Previous CATU cron task still running, skipping execution.");
+            return;
+          }
+          isCatuCronRunning = true;
+          const url = "https://apps.catu.id/CATUNewJavaStagingDev/rest/cronparamsromo";
+          logger.info(`[cron-catu] 🔄 Triggering CATU cron: ${url}`);
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+            const res = await fetch(url, {
+              method: "GET",
+              headers: { "User-Agent": "Wagate-Cron/1.0" },
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+
+            if (res.ok) {
+              const text = await res.text();
+              logger.info(`[cron-catu] ✅ CATU cron trigger success [${res.status}]: ${text.substring(0, 150)}`);
+            } else {
+              logger.error(`[cron-catu] ❌ CATU cron trigger failed with status [${res.status}]`);
+            }
+          } catch (err: any) {
+            logger.error(`[cron-catu] ❌ Error triggering CATU cron: ${err?.message || err}`);
+          } finally {
+            isCatuCronRunning = false;
+          }
+        },
+      }),
+    );
+  })
   .onError({ as: "global" }, ({ code, error, set }) => {
     const statusCode = (error as any).status || 500;
     const message =
