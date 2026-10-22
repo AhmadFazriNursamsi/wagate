@@ -3,6 +3,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 
 import env from "../../../env";
+import { expandPlaceholders } from "../../helper/greeting";
 import logger from "../../helper/logger";
 import {
     generateWarmupMessage,
@@ -216,7 +217,7 @@ export abstract class Orchestrator {
         for (let i = 0; i < warmup1Count; i++) {
           try {
             await randomDelay(400, 1000);
-            const msg = generateWarmupMessage(payload.content);
+            const msg = generateWarmupMessage(expandPlaceholders(payload.content));
             logger.info(
               `[${traceId}] Phase 1 [${i + 1}/${warmup1Count}]: "${msg}"`,
             );
@@ -248,7 +249,7 @@ export abstract class Orchestrator {
         for (let i = 0; i < warmup2Count; i++) {
           try {
             await randomDelay(400, 1000);
-            const msg = generateWarmupMessage(payload.content);
+            const msg = generateWarmupMessage(expandPlaceholders(payload.content));
             logger.info(
               `[${traceId}] Phase 2 [${i + 1}/${warmup2Count}]: "${msg}"`,
             );
@@ -290,7 +291,7 @@ export abstract class Orchestrator {
 
         try {
           await wa1.sendFile(
-            payload.content,
+            expandPlaceholders(payload.content),
             payload.number,
             tempFilePath,
           );
@@ -298,7 +299,7 @@ export abstract class Orchestrator {
           cleanupTempFile(tempFilePath);
         }
       } else {
-        await wa1.sendMsg(payload.content, payload.number);
+        await wa1.sendMsg(expandPlaceholders(payload.content), payload.number);
       }
 
       lastActivity = Date.now();

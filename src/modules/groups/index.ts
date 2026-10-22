@@ -19,7 +19,7 @@ import { inviteEvents, inviteStore, type InviteRow } from "./store";
 
 const TEMPLATES = [
   "Salam sejahtera, Bapak/Ibu 🙏\n\nKami dari Admin PUKAT (Profesional dan Usahawan Katolik) dengan hormat mengundang Anda untuk bergabung di grup komunitas PUKAT. Jika berkenan, silakan masuk melalui tautan berikut:\n{link}\n\nTerima kasih, Tuhan memberkati.",
-  "Selamat siang, semoga Bapak/Ibu dalam keadaan baik. Kami dari Admin PUKAT (Profesional dan Usahawan Katolik) ingin mengundang Anda bergabung ke grup komunitas kami untuk berbagi informasi dan saling terhubung. Berikut tautannya: {link}\n\nJika kurang berkenan, mohon abaikan pesan ini. Terima kasih 🙏",
+  "{salam}, semoga Bapak/Ibu dalam keadaan baik. Kami dari Admin PUKAT (Profesional dan Usahawan Katolik) ingin mengundang Anda bergabung ke grup komunitas kami untuk berbagi informasi dan saling terhubung. Berikut tautannya: {link}\n\nJika kurang berkenan, mohon abaikan pesan ini. Terima kasih 🙏",
   "Halo, mohon maaf mengganggu waktunya. Kami Admin PUKAT, komunitas Profesional dan Usahawan Katolik, dengan hormat mengundang Anda untuk bergabung di grup kami: {link}\n\nTerima kasih atas perhatiannya.",
   "Salam dari Admin PUKAT 👋\n\nKami mengundang Anda masuk ke grup komunitas Profesional dan Usahawan Katolik (PUKAT). Silakan bergabung lewat tautan ini bila berminat: {link}\n\nTuhan memberkati.",
   "Halo, semoga harinya menyenangkan. Kami Admin PUKAT (Profesional dan Usahawan Katolik) dengan senang hati mengundang Anda bergabung di grup komunitas kami: {link}\n\nBila ada pertanyaan, silakan balas pesan ini. Terima kasih 🙏",

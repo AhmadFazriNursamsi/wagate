@@ -28,6 +28,8 @@ const EnvSchema = z.object({
   WARMUP_REQUIRED: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
   // Restart a WhatsApp browser that has waited this long for a QR scan
   QR_RECYCLE_MS: z.coerce.number().int().min(10_000).default(240_000),
+  // Timezone used for the {salam} greeting (pagi/siang/sore/malam)
+  TIMEZONE: z.string().default("Asia/Jakarta"),
   // Delivery pacing (defaults = original anti-ban timing)
   WARMUP_EVERY: z.coerce.number().int().min(1).default(1),
   SEND_DELAY_MIN_MS: z.coerce.number().int().min(0).default(3000),
