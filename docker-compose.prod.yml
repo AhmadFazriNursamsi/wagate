@@ -40,5 +40,6 @@ services:
       WATCHTOWER_TIMEOUT: "40s"         # wait for graceful stop
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # Needed only while the GHCR package is private (run `docker login ghcr.io` once)
-      - ${HOME}/.docker/config.json:/config.json:ro
+    # The image is public, so no registry login is needed. If you make the
+    # GHCR package private, run `docker login ghcr.io` on the server and add:
+    #   - ${HOME}/.docker/config.json:/config.json:ro
