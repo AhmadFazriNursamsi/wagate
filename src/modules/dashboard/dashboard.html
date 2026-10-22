@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Undangan Grup PUKAT</title>
+<style>
+  :root {
+    --bg: #f6f6f3; --surface: #ffffff; --ink: #1d1d1b; --muted: #6b6b66; --line: #e3e3dd;
+    --accent: #1f5f4a; --accent-ink: #ffffff;
+    --queue: #b26a00; --queue-bg: #fff3df;
+    --sent: #1b7a4b; --sent-bg: #e4f5ec;
+    --fail: #b3261e; --fail-bg: #fdeceb;
+    --radius: 12px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141413; --surface: #1d1d1b; --ink: #ecece8; --muted: #9a9a93; --line: #2f2f2b;
+      --accent: #4fb08e; --accent-ink: #0f1f19;
+      --queue: #f0a63a; --queue-bg: #2b2210;
+      --sent: #55c58a; --sent-bg: #122a1d;
+      --fail: #f08a82; --fail-bg: #2e1614;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 20px 16px 60px; }
+  header { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 12.5px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .dot.live { background: var(--sent); box-shadow: 0 0 0 0 var(--sent); animation: pulse 2s infinite; }
+  .dot.off { background: var(--fail); }
+  @keyframes pulse { 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+  .banner { background: var(--queue-bg); color: var(--queue); border: 1px solid var(--queue); border-radius: var(--radius); padding: 10px 14px; margin-bottom: 14px; font-size: 14px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+  .stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+  .stat .n { font-size: 28px; font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat .l { color: var(--muted); font-size: 13px; }
+  .stat.queue .n { color: var(--queue); } .stat.sent .n { color: var(--sent); } .stat.fail .n { color: var(--fail); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card h2 { font-size: 15px; margin: 0 0 4px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+  textarea, input[type=text], input[type=password], input[type=search] {
+    width: 100%; font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  }
+  textarea { min-height: 96px; resize: vertical; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13.5px; }
+  textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 10px; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 9px 14px; }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .msg { font-size: 13.5px; } .msg.ok { color: var(--sent); } .msg.err { color: var(--fail); } .msg.info { color: var(--muted); }
+  .cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+  .col { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .col h3 { margin: 0; padding: 12px 14px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--line); }
+  .col.queue h3 { color: var(--queue); } .col.sent h3 { color: var(--sent); } .col.fail h3 { color: var(--fail); }
+  .badge { font-variant-numeric: tabular-nums; font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+  .queue .badge { background: var(--queue-bg); } .sent .badge { background: var(--sent-bg); } .fail .badge { background: var(--fail-bg); }
+  ul { list-style: none; margin: 0; padding: 0; max-height: 520px; overflow: auto; }
+  li { padding: 9px 14px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  li:last-child { border-bottom: 0; }
+  li .num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13.5px; }
+  li .meta { color: var(--muted); font-size: 12px; text-align: right; white-space: nowrap; }
+  li .err { grid-column: 1 / -1; color: var(--fail); font-size: 12px; }
+  li.sending .num::after { content: " · mengirim…"; color: var(--queue); font-family: inherit; font-size: 12px; }
+  li.flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { background: var(--accent); } to { background: transparent; } }
+  .acts { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }
+  .acts button.mini { margin-top: 0; }
+  button.mini.danger { color: var(--fail); }
+  .col h3 .grp { display: flex; align-items: center; gap: 8px; }
+  details.custom { margin-top: 12px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  details.custom summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+  details.custom textarea { min-height: 150px; font-family: inherit; font-size: 14px; margin-top: 8px; }
+  .count { color: var(--muted); font-size: 12.5px; }
+  button.mini { padding: 3px 9px; font-size: 12px; margin-top: 4px; }
+  .empty { padding: 18px 14px; color: var(--muted); font-size: 13.5px; }
+  .more { width: 100%; border: 0; border-top: 1px solid var(--line); border-radius: 0; color: var(--muted); }
+  .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .tools input[type=search] { max-width: 280px; }
+  .login { max-width: 420px; margin: 12vh auto; }
+  [hidden] { display: none !important; }
+  @media (prefers-reduced-motion: reduce) { .dot.live, li.flash { animation: none; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="login" class="card login" hidden>
+    <h2>Masuk</h2>
+    <p class="hint">Masukkan API key (SECRET_KEY) server. Disimpan hanya di browser ini.</p>
+    <form id="loginForm">
+      <input id="keyInput" type="password" placeholder="API key" autocomplete="current-password" required>
+      <div class="row"><button class="primary" type="submit">Masuk</button><span id="loginMsg" class="msg err"></span></div>
+    </form>
+  </div>
+
+  <div id="app" hidden>
+    <header>
+      <div>
+        <h1>Undangan Grup PUKAT</h1>
+        <div class="sub" id="groupLine">&nbsp;</div>
+      </div>
+      <div class="chips">
+        <span class="chip"><span id="liveDot" class="dot"></span><span id="liveText">Menyambung…</span></span>
+        <span class="chip" id="c1">Client 1: –</span>
+        <span class="chip" id="c2">Client 2: –</span>
+        <span class="chip" id="warm" hidden></span>
+        <button id="logout" type="button">Keluar</button>
+      </div>
+    </header>
+
+    <div id="dryBanner" class="banner" hidden>Mode simulasi (DRY RUN): tidak ada pesan yang dikirim ke WhatsApp.</div>
+
+    <section class="stats">
+      <div class="stat queue"><div class="n" id="nQueue">0</div><div class="l">Antri / sedang kirim</div></div>
+      <div class="stat sent"><div class="n" id="nSent">0</div><div class="l">Terkirim</div></div>
+      <div class="stat fail"><div class="n" id="nFail">0</div><div class="l">Gagal</div></div>
+      <div class="stat"><div class="n" id="nEta">–</div><div class="l">Perkiraan selesai</div></div>
+    </section>
+
+    <section class="card">
+      <h2>Tambah nomor ke antrean</h2>
+      <p class="hint">Tempel nomor, satu per baris atau dipisah koma. Format bebas (0812…, +62 812…, 62812…). Nomor yang sudah terkirim atau sudah antri otomatis dilewati; untuk mengirim ulang, pakai tombol "Kirim ulang" di daftar Terkirim.</p>
+      <textarea id="numbers" placeholder="081234567890&#10;+62 812-3456-7891"></textarea>
+      <details class="custom" id="customBox">
+        <summary>Pesan kustom <span class="count" id="customState">(memakai pesan bawaan)</span></summary>
+        <p class="hint" style="margin-top:8px">Kosongkan untuk memakai pesan bawaan. Pesan dikirim persis seperti yang Anda tulis, <strong>tanpa link grup</strong>. Kalau ingin menyertakan link, tulis <code>{link}</code> di tempat yang diinginkan. Untuk beberapa variasi, pisahkan dengan baris yang hanya berisi <code>---</code>; tiap penerima mendapat satu variasi acak, karena teks yang sama persis ke banyak orang mudah ditandai spam.</p>
+        <textarea id="customMsg" placeholder="Halo, terima kasih sudah menghubungi kami.&#10;---&#10;Halo, ada info untuk Anda. Link grup: {link}"></textarea>
+        <div class="row" style="margin-top:6px">
+          <button id="fillDefault" type="button" class="mini">Isi dengan pesan bawaan (untuk diedit)</button>
+          <button id="clearCustom" type="button" class="mini">Kosongkan</button>
+        </div>
+      </details>
+      <div class="row">
+        <button id="add" class="primary" type="button">Tambah ke antrean</button>
+        <button id="retry" type="button" hidden>Kirim ulang yang gagal</button>
+        <span id="addMsg" class="msg info"></span>
+      </div>
+    </section>
+
+    <div class="tools">
+      <input id="search" type="search" placeholder="Cari nomor…" aria-label="Cari nomor">
+    </div>
+
+    <section class="cols">
+      <div class="col queue"><h3><span>Antri <span class="badge" id="bQueue">0</span></span><button id="clearQueue" type="button" class="mini danger" hidden>Batalkan semua</button></h3><ul id="lQueue"></ul></div>
+      <div class="col sent"><h3>Terkirim <span class="badge" id="bSent">0</span></h3><ul id="lSent"></ul></div>
+      <div class="col fail"><h3><span>Gagal <span class="badge" id="bFail">0</span></span><button id="clearFail" type="button" class="mini danger" hidden>Hapus semua</button></h3><ul id="lFail"></ul></div>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const KEY_STORE = "wagate_key";
+  const PAGE = 300; // rows rendered per list before "tampilkan lebih"
+
+  let key = null;
+  try { key = localStorage.getItem(KEY_STORE); } catch {}
+
+  const rows = new Map();      // number -> row
+  const limits = { queue: PAGE, sent: PAGE, fail: PAGE };
+  let meta = { perMessageSeconds: 5 };
+  let abort = null;
+  let renderTimer = null;
+  let flashNumber = null;
+
+  const fmtTime = (ms) => new Date(ms).toLocaleString("id-ID", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const fmtEta = (sec) => {
+    if (sec <= 0) return "–";
+    if (sec < 90) return sec + " dtk";
+    const m = Math.round(sec / 60);
+    if (m < 90) return m + " menit";
+    return Math.floor(m / 60) + " j " + (m % 60) + " m";
+  };
+
+  function normalize(raw) {
+    let n = raw.replace(/\D/g, "");
+    if (n.startsWith("0")) n = "62" + n.slice(1);
+    else if (n.startsWith("8")) n = "62" + n;
+    return /^[0-9]{10,15}$/.test(n) ? n : null;
+  }
+
+  async function api(path, options = {}) {
+    const res = await fetch("/api/v1/groups" + path, {
+      ...options,
+      headers: { "x-api-key": key, "content-type": "application/json", ...(options.headers || {}) },
+    });
+    if (res.status === 401) { logout("API key salah."); throw new Error("401"); }
+    return res;
+  }
+
+  // ── rendering ───────────────────────────────────────────────
+  function scheduleRender() {
+    if (renderTimer) return;
+    renderTimer = setTimeout(() => { renderTimer = null; render(); }, 120);
+  }
+
+  function counts() {
+    let queue = 0, sent = 0, fail = 0;
+    for (const r of rows.values()) {
+      if (r.status === "sent") sent++;
+      else if (r.status === "failed") fail++;
+      else queue++;
+    }
+    return { queue, sent, fail };
+  }
+
+  function listFor(kind, filter) {
+    const out = [];
+    for (const r of rows.values()) {
+      const k = r.status === "sent" ? "sent" : r.status === "failed" ? "fail" : "queue";
+      if (k === kind && (!filter || r.number.includes(filter))) out.push(r);
+    }
+    if (kind === "queue") out.sort((a, b) => a.queuedAt - b.queuedAt);
+    else out.sort((a, b) => b.updatedAt - a.updatedAt);
+    return out;
+  }
+
+  function fillList(ul, kind, items) {
+    ul.replaceChildren();
+    if (!items.length) {
+      const e = document.createElement("div");
+      e.className = "empty";
+      e.textContent = kind === "queue" ? "Tidak ada antrean." : kind === "sent" ? "Belum ada yang terkirim." : "Tidak ada yang gagal.";
+      ul.append(e);
+      return;
+    }
+    for (const r of items.slice(0, limits[kind])) {
+      const li = document.createElement("li");
+      if (r.status === "sending") li.classList.add("sending");
+      if (r.number === flashNumber) li.classList.add("flash");
+      const left = document.createElement("div");
+      const num = document.createElement("span");
+      num.className = "num"; num.textContent = r.number;
+      left.append(num);
+      if (r.status === "failed" && r.error) {
+        const err = document.createElement("div");
+        err.className = "err"; err.textContent = r.error;
+        left.append(err);
+      }
+      const right = document.createElement("div");
+      right.className = "meta";
+      right.textContent = kind === "queue" ? "" : fmtTime(r.updatedAt);
+      if (kind === "sent" && r.attempts > 1) right.textContent += " · terkirim " + r.attempts + "×";
+      if (r.status !== "sending") {
+        const acts = document.createElement("div");
+        acts.className = "acts";
+        if (kind === "sent") {
+          const b = document.createElement("button");
+          b.type = "button"; b.className = "mini"; b.textContent = "Kirim ulang";
+          b.onclick = () => resend(r, b);
+          acts.append(b);
+        }
+        const d = document.createElement("button");
+        d.type = "button"; d.className = "mini danger";
+        d.textContent = kind === "queue" ? "Batalkan" : "Hapus";
+        d.onclick = () => removeNumbers([r.number], kind === "sent"
+          ? "Hapus " + r.number + " dari daftar?\n\nCatatan terkirimnya ikut hilang, jadi nomor ini bisa dikirimi undangan lagi."
+          : null);
+        acts.append(d);
+        right.append(acts);
+      }
+      li.append(left, right);
+      ul.append(li);
+    }
+    if (items.length > limits[kind]) {
+      const b = document.createElement("button");
+      b.className = "more"; b.type = "button";
+      b.textContent = "Tampilkan lebih (" + (items.length - limits[kind]) + " lagi)";
+      b.onclick = () => { limits[kind] += PAGE; render(); };
+      ul.append(b);
+    }
+  }
+
+  function render() {
+    const c = counts();
+    $("nQueue").textContent = c.queue; $("nSent").textContent = c.sent; $("nFail").textContent = c.fail;
+    $("bQueue").textContent = c.queue; $("bSent").textContent = c.sent; $("bFail").textContent = c.fail;
+    $("nEta").textContent = fmtEta(c.queue * (meta.perMessageSeconds || 5));
+    $("retry").hidden = c.fail === 0;
+    $("clearFail").hidden = c.fail === 0;
+    $("clearQueue").hidden = ![...rows.values()].some((r) => r.status === "queued");
+    const f = $("search").value.replace(/\D/g, "");
+    fillList($("lQueue"), "queue", listFor("queue", f));
+    fillList($("lSent"), "sent", listFor("sent", f));
+    fillList($("lFail"), "fail", listFor("fail", f));
+    flashNumber = null;
+  }
+
+  function applyStatus(s) {
+    meta = { ...meta, ...s };
+    $("groupLine").textContent = s.groupId || "";
+    $("c1").textContent = "Client 1: " + (s.client1 || "belum siap");
+    $("c2").textContent = "Client 2: " + (s.client2 || "belum siap");
+    $("dryBanner").hidden = !s.dryRun;
+    const w = $("warm");
+    w.hidden = !(s.warming || s.waitingForClients);
+    w.textContent = s.warming ? "💬 Warm-up: Client 1 ↔ Client 2 sedang ngobrol" : "⏸️ Menunggu kedua akun terhubung";
+  }
+
+  function setLive(state) {
+    const dot = $("liveDot");
+    dot.className = "dot " + (state === "live" ? "live" : state === "off" ? "off" : "");
+    $("liveText").textContent = state === "live" ? "Realtime" : state === "off" ? "Terputus, menyambung ulang…" : "Menyambung…";
+  }
+
+  // ── realtime stream (SSE over fetch so the key stays in a header) ──
+  async function connect() {
+    let wait = 1000;
+    while (key) {
+      abort = new AbortController();
+      try {
+        setLive("connecting");
+        const res = await fetch("/api/v1/groups/invite/stream", { headers: { "x-api-key": key }, signal: abort.signal });
+        if (res.status === 401) { logout("API key salah."); return; }
+        if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
+        setLive("live"); wait = 1000;
+        const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+        let buf = "";
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += value;
+          let i;
+          while ((i = buf.indexOf("\n\n")) >= 0) {
+            const block = buf.slice(0, i); buf = buf.slice(i + 2);
+            handle(block);
+          }
+        }
+      } catch (e) {
+        if (!key || e.name === "AbortError") return;
+      }
+      setLive("off");
+      await new Promise((r) => setTimeout(r, wait));
+      wait = Math.min(wait * 2, 10000);
+    }
+  }
+
+  function handle(block) {
+    let ev = "message", data = "";
+    for (const line of block.split("\n")) {
+      if (line.startsWith("event:")) ev = line.slice(6).trim();
+      else if (line.startsWith("data:")) data += line.slice(5).trim();
+    }
+    if (!data) return;
+    const d = JSON.parse(data);
+    if (ev === "snapshot") {
+      rows.clear();
+      for (const r of d.rows) rows.set(r.number, r);
+      applyStatus(d); render();
+    } else if (ev === "row") {
+      rows.set(d.row.number, d.row);
+      flashNumber = d.row.number;
+      scheduleRender();
+    } else if (ev === "removed") {
+      rows.delete(d.number);
+      scheduleRender();
+    } else if (ev === "status") {
+      applyStatus(d); scheduleRender();
+    }
+  }
+
+  // ── actions ─────────────────────────────────────────────────
+  async function submit(numbers, button, force = false, withCustom = false) {
+    const msg = $("addMsg");
+    button.disabled = true;
+    msg.className = "msg info"; msg.textContent = "Mengirim ke antrean…";
+    try {
+      const res = await api("/invite", { method: "POST", body: JSON.stringify({ numbers, force, ...(withCustom ? customPayload() : {}) }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.message || "Gagal (" + res.status + ")");
+      const d = j.data;
+      const parts = [d.queued + " masuk antrean"];
+      if (d.alreadySent) parts.push(d.alreadySent + " sudah terkirim");
+      if (d.alreadyQueued) parts.push(d.alreadyQueued + " sudah antri");
+      if (d.alreadyInGroup) parts.push(d.alreadyInGroup + " sudah di grup");
+      if (d.customMessage) parts.push("pesan kustom (" + d.customMessage + " variasi)");
+      if (d.resent) parts.push(d.resent + " dikirim ulang");
+      if (d.retriedFailed) parts.push(d.retriedFailed + " dicoba ulang");
+      msg.className = "msg ok"; msg.textContent = parts.join(" · ");
+      return true;
+    } catch (e) {
+      if (e.message !== "401") { msg.className = "msg err"; msg.textContent = e.message; }
+      return false;
+    } finally { button.disabled = false; }
+  }
+
+  $("add").onclick = async () => {
+    const parsed = $("numbers").value.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
+    const valid = new Set(); let invalid = 0;
+    for (const p of parsed) { const n = normalize(p); if (n) valid.add(n); else invalid++; }
+    if (!valid.size) { $("addMsg").className = "msg err"; $("addMsg").textContent = "Tidak ada nomor valid."; return; }
+    if (await submit([...valid], $("add"), false, true)) {
+      $("numbers").value = "";
+      if (invalid) $("addMsg").textContent += " · " + invalid + " tidak valid dilewati";
+    }
+  };
+
+  async function removeNumbers(numbers, confirmText) {
+    if (confirmText && !confirm(confirmText)) return;
+    const msg = $("addMsg");
+    try {
+      const res = await api("/invite/remove", { method: "POST", body: JSON.stringify({ numbers }) });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.message || "Gagal (" + res.status + ")");
+      const d = j.data;
+      msg.className = "msg ok";
+      msg.textContent = d.removed + " nomor dihapus" + (d.skippedSending ? " · " + d.skippedSending + " sedang dikirim, dilewati" : "");
+    } catch (e) {
+      if (e.message !== "401") { msg.className = "msg err"; msg.textContent = e.message; }
+    }
+  }
+
+  // ── custom message ──────────────────────────────────────────
+  const MSG_STORE = "wagate_custom_msg";
+  function variants() {
+    return $("customMsg").value.split(/^\s*---\s*$/m).map((m) => m.trim()).filter(Boolean);
+  }
+  function customPayload() {
+    const v = variants();
+    return v.length ? { messages: v } : {};
+  }
+  function updateCustomState() {
+    const n = variants().length;
+    $("customState").textContent = n ? "(kustom: " + n + " variasi)" : "(memakai pesan bawaan)";
+    try { localStorage.setItem(MSG_STORE, $("customMsg").value); } catch {}
+  }
+  try { $("customMsg").value = localStorage.getItem(MSG_STORE) || ""; } catch {}
+  $("customMsg").oninput = updateCustomState;
+  $("clearCustom").onclick = () => { $("customMsg").value = ""; updateCustomState(); };
+  $("fillDefault").onclick = async () => {
+    try {
+      const res = await api("/invite/templates");
+      const j = await res.json();
+      $("customMsg").value = j.data.templates.join("\n---\n");
+      updateCustomState();
+    } catch {}
+  };
+  updateCustomState();
+  if (variants().length) $("customBox").open = true;
+
+  function resend(r, button) {
+    const ok = confirm(
+      "Kirim ulang undangan ke " + r.number + "?\n\nNomor ini sudah menerima undangan pada " +
+      fmtTime(r.updatedAt) + ". Pesan akan masuk antrean lagi.");
+    if (ok) submit([r.number], button, true);
+  }
+
+  $("clearQueue").onclick = () => {
+    const list = [...rows.values()].filter((r) => r.status === "queued").map((r) => r.number);
+    if (list.length) removeNumbers(list, "Batalkan " + list.length + " nomor yang masih antri?\n\nNomor yang sedang dikirim tidak ikut dibatalkan.");
+  };
+  $("clearFail").onclick = () => {
+    const list = [...rows.values()].filter((r) => r.status === "failed").map((r) => r.number);
+    if (list.length) removeNumbers(list, "Hapus " + list.length + " nomor yang gagal dari daftar?");
+  };
+
+  $("retry").onclick = () => {
+    const failed = [...rows.values()].filter((r) => r.status === "failed").map((r) => r.number);
+    if (failed.length) submit(failed, $("retry"));
+  };
+
+  $("search").oninput = () => { limits.queue = limits.sent = limits.fail = PAGE; render(); };
+
+  // ── login / logout ──────────────────────────────────────────
+  function showLogin(message) {
+    $("app").hidden = true; $("login").hidden = false;
+    $("loginMsg").textContent = message || "";
+    $("keyInput").focus();
+  }
+
+  function logout(message) {
+    key = null;
+    try { localStorage.removeItem(KEY_STORE); } catch {}
+    if (abort) abort.abort();
+    rows.clear();
+    showLogin(message);
+  }
+
+  function start() {
+    $("login").hidden = true; $("app").hidden = false;
+    connect();
+  }
+
+  $("loginForm").onsubmit = (e) => {
+    e.preventDefault();
+    key = $("keyInput").value.trim();
+    try { localStorage.setItem(KEY_STORE, key); } catch {}
+    $("keyInput").value = "";
+    start();
+  };
+  $("logout").onclick = () => logout("");
+
+  if (key) start(); else showLogin("");
+})();
+</script>
+</body>
+</html>

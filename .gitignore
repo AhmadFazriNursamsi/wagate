@@ -44,3 +44,11 @@ package-lock.json
 .wwebjs_auth
 .last-cleanup
 logs/
+# broadcast recipient lists (personal data)
+broadcast/numbers.txt
+
+broadcast/numbers.dummy.txt
+
+# invitation ledger
+/data
+.wwebjs_auth.old-*

@@ -10,3 +10,4 @@ services:
     volumes:
       - ./.wwebjs_auth:/app/.wwebjs_auth
       - ./logs:/app/logs
+      - ./data:/app/data

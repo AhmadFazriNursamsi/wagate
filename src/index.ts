@@ -5,7 +5,9 @@ import QRCode from "qrcode";
 
 import env from "../env";
 import logger from "./helper/logger";
+import { dashboard } from "./modules/dashboard";
 import { groups } from "./modules/groups";
+import { resumeInvites } from "./modules/groups/service";
 import { messaging } from "./modules/messaging";
 import { loggerPlugin } from "./plugins/logger";
 import { client1, client2, wagatePlugin } from "./plugins/wagate";
@@ -102,6 +104,7 @@ const app = new Elysia()
       message,
     };
   })
+  .use(dashboard)
   .get("/qr", async ({ request, set }) => {
     if (!isValidKey(extractKey(request, true))) {
       set.status = 401;
@@ -165,16 +168,27 @@ const app = new Elysia()
 
 // ─── Startup ─────────────────────────────────────────────────────
 logger.info(`🚀 Server running on port ${env.PORT}`);
+if (env.DRY_RUN) logger.warn("🧪 DRY_RUN=true — NO messages will be sent to WhatsApp");
 
 (async () => {
   try {
     logger.info("═══════════════════════════════════════════════");
     logger.info("[startup] Initializing Client 1 & Client 2 concurrently...");
     logger.info("═══════════════════════════════════════════════");
-    await Promise.allSettled([
-      client1.init().catch((e) => logger.error(`[startup] Client 1 init error: ${e}`)),
-      client2.init().catch((e) => logger.error(`[startup] Client 2 init error: ${e}`)),
-    ]);
+    const init1 = client1
+      .init()
+      .catch((e) => logger.error(`[startup] Client 1 init error: ${e}`));
+    const init2 = client2
+      .init()
+      .catch((e) => logger.error(`[startup] Client 2 init error: ${e}`));
+
+    // Resume queued invitations as soon as the sender (Client 1) is ready —
+    // don't wait for Client 2, which may be sitting on a QR scan.
+    void init1.then(() => {
+      if (client1.phoneNumber) resumeInvites(client1, client2);
+    });
+
+    await Promise.allSettled([init1, init2]);
 
     logger.info("");
     logger.info("[startup] Verifying and linking partner contacts...");

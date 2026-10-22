@@ -9,3 +9,5 @@ error.log
 .git
 .github
 .claude
+data
+.wwebjs_auth.old-*

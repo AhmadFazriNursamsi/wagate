@@ -15,6 +15,9 @@ export class WagateClient {
   client: Client;
   public qrCode: string | null = null;
   public phoneNumber: string = "";
+  private recycling = false;
+  private waitingSince = 0; // when we started waiting for a login (0 = not waiting)
+  private watchdog?: ReturnType<typeof setInterval>;
 
   constructor(
     public readonly clientId: string,
@@ -46,6 +49,7 @@ export class WagateClient {
     this.client.on("ready", () => this.onReady());
     this.client.on("authenticated", () => {
       this.qrCode = null;
+      this.waitingSince = 0;
       logger.info(`[${this.clientId}] ✅ Authenticated successfully`);
     });
     this.client.on("auth_failure", (msg) => {
@@ -53,6 +57,13 @@ export class WagateClient {
     });
     this.client.on("disconnected", (reason) => {
       logger.warn(`[${this.clientId}] ⚠️ Disconnected: ${reason}`);
+      if (reason === "LOGOUT") {
+        // whatsapp-web.js deletes the session folder while this browser is
+        // still running, so a later QR scan would not be saved to disk.
+        // Start a fresh browser instead so the next scan persists.
+        this.phoneNumber = "";
+        setTimeout(() => void this.recycle("LOGOUT"), 3000);
+      }
     });
   }
 
@@ -62,7 +73,34 @@ export class WagateClient {
     qrcode.generate(qr, { small: true });
   }
 
+  /**
+   * Close the browser and start a new one with a clean profile. Used when
+   * the session was logged out, or the QR has been waiting too long.
+   */
+  private async recycle(reason: string) {
+    if (this.recycling) return;
+    this.recycling = true;
+    logger.warn(`[${this.clientId}] 🔄 Restarting browser (${reason}) to get a fresh QR`);
+    try {
+      this.qrCode = null;
+      this.phoneNumber = "";
+      await this.client.destroy().catch(() => {});
+      await new Promise((r) => setTimeout(r, 2000));
+      await this.clearChromiumLocks();
+      this.waitingSince = Date.now();
+      this.client.once("ready", () => this.setupProfile());
+      await this.client.initialize();
+    } catch (err) {
+      logger.error(
+        `[${this.clientId}] Restart failed: ${err instanceof Error ? err.message : err}`,
+      );
+    } finally {
+      this.recycling = false;
+    }
+  }
+
   private async onReady() {
+    this.waitingSince = 0;
     this.qrCode = null;
     if (this.client.info?.wid?.user) {
       this.phoneNumber = this.client.info.wid.user;
@@ -88,6 +126,18 @@ export class WagateClient {
   async init() {
     await this.clearChromiumLocks();
     logger.info(`[${this.clientId}] Initializing — waiting for QR scan...`);
+    this.waitingSince = Date.now();
+    // A QR left unscanned for too long makes WhatsApp log the session out;
+    // restart the browser before that happens.
+    this.watchdog ??= setInterval(() => {
+      if (
+        this.waitingSince > 0 &&
+        !this.recycling &&
+        Date.now() - this.waitingSince > env.QR_RECYCLE_MS
+      ) {
+        void this.recycle("QR not scanned in time");
+      }
+    }, 10_000);
 
     return new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => {
@@ -179,6 +229,7 @@ export class WagateClient {
    * Mark a chat as read (sendSeen) with a 1s delay.
    */
   async markAsRead(number: string) {
+    if (env.DRY_RUN) return;
     try {
       await new Promise((r) => setTimeout(r, 1000));
       const chatId = await this.getJid(number);
@@ -211,6 +262,15 @@ export class WagateClient {
     await (fast
       ? this.helper.delay(300, 500)
       : this.helper.delay(env.SEND_DELAY_MIN_MS, env.SEND_DELAY_RANGE_MS));
+    if (env.DRY_RUN) {
+      const typing = fast
+        ? 300 + Math.random() * 500
+        : env.TYPING_MIN_MS +
+          Math.random() * Math.max(0, env.TYPING_MAX_MS - env.TYPING_MIN_MS);
+      await new Promise((r) => setTimeout(r, typing));
+      logger.info(`[${this.clientId}] 🧪 DRY RUN — would send text to ${to}`);
+      return;
+    }
     const chatId = await this.getJid(to);
     await this.sendTyping(chatId, fast);
     logger.info(`[${this.clientId}] 📤 Sending text to ${to} (${chatId})`);
@@ -237,6 +297,10 @@ export class WagateClient {
 
   async sendFile(msg: string = "", to: string, filePath: string) {
     await this.helper.delay(env.SEND_DELAY_MIN_MS, env.SEND_DELAY_RANGE_MS);
+    if (env.DRY_RUN) {
+      logger.info(`[${this.clientId}] 🧪 DRY RUN — would send media to ${to}`);
+      return;
+    }
     const chatId = await this.getJid(to);
     await this.sendTyping(chatId);
     logger.info(`[${this.clientId}] 📤 Sending media to ${to} (${chatId})`);
@@ -268,15 +332,21 @@ export class WagateClient {
    * Invite link (given or fetched) + current member numbers. Requires admin.
    */
   async getGroupInvite(groupId: string, link?: string) {
-    const chat: any = await this.client.getChatById(groupId);
-    if (!chat?.isGroup) throw new Error("Not a group");
-    const me = this.client.info?.wid?._serialized;
-    const isAdmin = chat.participants?.some(
-      (p: any) => p.id._serialized === me && (p.isAdmin || p.isSuperAdmin),
+    // With an explicit link we only need the chat to skip existing members,
+    // so admin rights are not required and a missing chat is tolerated.
+    const chat: any = await this.client.getChatById(groupId).catch(() => null);
+    const members = new Set<string>(
+      (chat?.participants ?? []).map((p: any) => p.id.user as string),
     );
-    if (!isAdmin) throw new Error("Client 1 is not an admin of this group");
+
     let inviteLink = link;
     if (!inviteLink) {
+      if (!chat?.isGroup) throw new Error("Not a group (or Client 1 is not a member)");
+      const me = this.client.info?.wid?._serialized;
+      const isAdmin = chat.participants?.some(
+        (p: any) => p.id._serialized === me && (p.isAdmin || p.isSuperAdmin),
+      );
+      if (!isAdmin) throw new Error("Client 1 is not an admin of this group");
       // Auto-fetch depends on WhatsApp Web internals and may be unavailable
       // on the pinned web build; callers can pass the link explicitly.
       const code = await chat.getInviteCode().catch(() => undefined);
@@ -288,13 +358,7 @@ export class WagateClient {
       }
       inviteLink = `https://chat.whatsapp.com/${code}`;
     }
-    return {
-      name: chat.name as string,
-      link: inviteLink,
-      members: new Set<string>(
-        (chat.participants ?? []).map((p: any) => p.id.user as string),
-      ),
-    };
+    return { name: (chat?.name as string) ?? groupId, link: inviteLink, members };
   }
 
   /**
