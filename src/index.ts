@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 
 import env from "../env";
 import logger from "./helper/logger";
+import { groups } from "./modules/groups";
 import { messaging } from "./modules/messaging";
 import { loggerPlugin } from "./plugins/logger";
 import { client1, client2, wagatePlugin } from "./plugins/wagate";
@@ -157,7 +158,8 @@ const app = new Elysia()
         }
       })
       .get("/", () => ({ message: "REST API is working" }))
-      .use(messaging),
+      .use(messaging)
+      .use(groups),
   )
   .listen(env.PORT);
 

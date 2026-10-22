@@ -247,6 +247,57 @@ export class WagateClient {
   }
 
   /**
+   * Groups this account belongs to, with whether it is an admin.
+   */
+  async listGroups() {
+    const me = this.client.info?.wid?._serialized;
+    const chats = await this.client.getChats();
+    return chats
+      .filter((c) => c.isGroup)
+      .map((c: any) => ({
+        id: c.id._serialized as string,
+        name: c.name as string,
+        participants: (c.participants ?? []).length as number,
+        isAdmin: !!c.participants?.find(
+          (p: any) => p.id._serialized === me && (p.isAdmin || p.isSuperAdmin),
+        ),
+      }));
+  }
+
+  /**
+   * Invite link (given or fetched) + current member numbers. Requires admin.
+   */
+  async getGroupInvite(groupId: string, link?: string) {
+    const chat: any = await this.client.getChatById(groupId);
+    if (!chat?.isGroup) throw new Error("Not a group");
+    const me = this.client.info?.wid?._serialized;
+    const isAdmin = chat.participants?.some(
+      (p: any) => p.id._serialized === me && (p.isAdmin || p.isSuperAdmin),
+    );
+    if (!isAdmin) throw new Error("Client 1 is not an admin of this group");
+    let inviteLink = link;
+    if (!inviteLink) {
+      // Auto-fetch depends on WhatsApp Web internals and may be unavailable
+      // on the pinned web build; callers can pass the link explicitly.
+      const code = await chat.getInviteCode().catch(() => undefined);
+      if (!code || typeof code !== "string") {
+        throw new Error(
+          "Could not fetch the invite link automatically — pass it as inviteLink " +
+            "(WhatsApp → group info → Invite via link)",
+        );
+      }
+      inviteLink = `https://chat.whatsapp.com/${code}`;
+    }
+    return {
+      name: chat.name as string,
+      link: inviteLink,
+      members: new Set<string>(
+        (chat.participants ?? []).map((p: any) => p.id.user as string),
+      ),
+    };
+  }
+
+  /**
    * Clear all messages in a chat with the given number.
    */
   async clearChat(number: string) {
