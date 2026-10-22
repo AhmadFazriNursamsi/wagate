@@ -10,6 +10,9 @@ const EnvSchema = z.object({
   DISPLAY_NAME_2: z.string().optional(),
   // When true, nothing is sent to WhatsApp: the queue, delays and logs run as normal
   DRY_RUN: z.enum(["true", "false"]).default("false").transform((v) => v === "true"),
+  // In production the app replaces each account's profile picture with logo.jpg
+  // and sets its display name. Set to "false" to leave the profiles untouched.
+  SETUP_PROFILE: z.enum(["true", "false"]).default("true").transform((v) => v === "true"),
   // Defaults used by the dashboard / invite API when not sent in the request
   INVITE_GROUP_ID: z.string().regex(/^[0-9-]+@g\.us$/).optional(),
   INVITE_LINK: z.string().regex(/^https:\/\/chat\.whatsapp\.com\/[A-Za-z0-9]+$/).optional(),

@@ -3,10 +3,13 @@ services:
     build: .
     restart: unless-stopped
     ports:
-      - "${PORT:-3000}:3000"
+      # BIND_ADDR limits which host address is exposed (default: all). Set it to
+      # the VPN/LAN IP, e.g. 10.10.3.41, to keep the dashboard off other networks.
+      - "${BIND_ADDR:-0.0.0.0}:${PORT:-3000}:3000"
     env_file: .env
     environment:
       NODE_ENV: production
+      PORT: "3000"   # port inside the container; the host port is set by PORT in .env
     volumes:
       - ./.wwebjs_auth:/app/.wwebjs_auth
       - ./logs:/app/logs

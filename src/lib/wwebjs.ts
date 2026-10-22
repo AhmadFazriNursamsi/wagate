@@ -163,7 +163,7 @@ export class WagateClient {
   }
 
   setupProfile() {
-    if (env.NODE_ENV === "production") {
+    if (env.NODE_ENV === "production" && env.SETUP_PROFILE) {
       const media = MessageMedia.fromFilePath("./logo.jpg");
       this.client.setProfilePicture(media);
       this.client.setDisplayName(
