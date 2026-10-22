@@ -219,3 +219,26 @@ process.once("uncaughtException", async (err) => {
 });
 
 export { app };
+
+// ─── Graceful shutdown ───────────────────────────────────────────
+// Close both browsers cleanly so LocalAuth flushes the WhatsApp
+// sessions to disk (a hard kill during a redeploy can lose them).
+let shuttingDown = false;
+
+async function shutdown(signal: string) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info(`[shutdown] ${signal} received — closing WhatsApp clients...`);
+
+  const timeout = new Promise((resolve) => setTimeout(resolve, 20_000));
+  await Promise.race([
+    Promise.allSettled([client1.client.destroy(), client2.client.destroy()]),
+    timeout,
+  ]);
+
+  logger.info("[shutdown] ✅ Done");
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => void shutdown("SIGTERM"));
+process.on("SIGINT", () => void shutdown("SIGINT"));

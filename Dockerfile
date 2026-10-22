@@ -14,7 +14,7 @@ ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 
 COPY package.json bun.lock ./
-RUN bun install
+RUN bun install --frozen-lockfile
 
 COPY . .
 

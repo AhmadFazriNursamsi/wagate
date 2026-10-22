@@ -5,8 +5,21 @@ on:
     branches: [main]
     tags: ["v*"]
 
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+
   build-push:
+    needs: typecheck
     runs-on: ubuntu-latest
     permissions:
       contents: read

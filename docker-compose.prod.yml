@@ -1,0 +1,43 @@
+# Production stack: pulls the prebuilt image from GHCR and keeps it
+# up to date automatically (Watchtower). No SSH or manual
+# `docker compose pull && up -d` needed after the first setup.
+services:
+  wagate:
+    image: ghcr.io/ahmadfazrinursamsi/wagate:main
+    restart: unless-stopped
+    init: true
+    # Give the app time to close both WhatsApp browsers cleanly on redeploy.
+    stop_grace_period: 40s
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file: .env
+    environment:
+      NODE_ENV: production
+    volumes:
+      - ./.wwebjs_auth:/app/.wwebjs_auth
+      - ./logs:/app/logs
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    healthcheck:
+      test:
+        - CMD
+        - bun
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/v1/',{headers:{'x-api-key':process.env.SECRET_KEY}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  watchtower:
+    image: nickfedor/watchtower:latest
+    restart: unless-stopped
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true"   # only update containers with the label above
+      WATCHTOWER_POLL_INTERVAL: "60"    # seconds between registry checks
+      WATCHTOWER_CLEANUP: "true"        # remove old images after update
+      WATCHTOWER_TIMEOUT: "40s"         # wait for graceful stop
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Needed only while the GHCR package is private (run `docker login ghcr.io` once)
+      - ${HOME}/.docker/config.json:/config.json:ro
