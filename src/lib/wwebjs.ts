@@ -160,11 +160,14 @@ export class WagateClient {
   /**
    * Simulate typing indicator for 1-3 seconds before sending.
    */
-  private async sendTyping(chatId: string) {
+  private async sendTyping(chatId: string, fast = false) {
     try {
       const chat = await this.client.getChatById(chatId);
       await chat.sendStateTyping();
-      const typingDuration = 1000 + Math.random() * 2000; // 1-3s
+      const [min, max] = fast
+        ? [300, 800]
+        : [env.TYPING_MIN_MS, Math.max(env.TYPING_MIN_MS, env.TYPING_MAX_MS)];
+      const typingDuration = min + Math.random() * (max - min);
       await new Promise((r) => setTimeout(r, typingDuration));
       await chat.clearState();
     } catch (err) {
@@ -200,10 +203,16 @@ export class WagateClient {
     return `${cleaned}@c.us`;
   }
 
-  async sendMsg(msg: string, to: string) {
-    await this.helper.delay();
+  /**
+   * `fast` is for warm-up traffic between our own two accounts,
+   * which does not need the full per-recipient pacing.
+   */
+  async sendMsg(msg: string, to: string, fast = false) {
+    await (fast
+      ? this.helper.delay(300, 500)
+      : this.helper.delay(env.SEND_DELAY_MIN_MS, env.SEND_DELAY_RANGE_MS));
     const chatId = await this.getJid(to);
-    await this.sendTyping(chatId);
+    await this.sendTyping(chatId, fast);
     logger.info(`[${this.clientId}] 📤 Sending text to ${to} (${chatId})`);
     try {
       await this.client.sendMessage(chatId, msg);
@@ -227,7 +236,7 @@ export class WagateClient {
   }
 
   async sendFile(msg: string = "", to: string, filePath: string) {
-    await this.helper.delay();
+    await this.helper.delay(env.SEND_DELAY_MIN_MS, env.SEND_DELAY_RANGE_MS);
     const chatId = await this.getJid(to);
     await this.sendTyping(chatId);
     logger.info(`[${this.clientId}] 📤 Sending media to ${to} (${chatId})`);

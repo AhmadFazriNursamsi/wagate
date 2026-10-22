@@ -1,11 +1,29 @@
 import { cron } from "@elysiajs/cron";
+import { timingSafeEqual } from "node:crypto";
 import { Elysia } from "elysia";
+import QRCode from "qrcode";
 
 import env from "../env";
 import logger from "./helper/logger";
 import { messaging } from "./modules/messaging";
 import { loggerPlugin } from "./plugins/logger";
 import { client1, client2, wagatePlugin } from "./plugins/wagate";
+
+// ─── Auth helper ────────────────────────────────────────────────
+const secretBuf = Buffer.from(env.SECRET_KEY);
+function isValidKey(candidate: string | null | undefined): boolean {
+  if (!candidate) return false;
+  const buf = Buffer.from(candidate);
+  return buf.length === secretBuf.length && timingSafeEqual(buf, secretBuf);
+}
+
+function extractKey(request: Request, allowQuery = false): string | null {
+  const header =
+    request.headers.get("x-api-key") ??
+    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  if (header) return header;
+  return allowQuery ? new URL(request.url).searchParams.get("key") : null;
+}
 
 // ─── Main Application ───────────────────────────────────────────
 const app = new Elysia()
@@ -83,10 +101,20 @@ const app = new Elysia()
       message,
     };
   })
-  .get("/qr", ({ set }) => {
+  .get("/qr", async ({ request, set }) => {
+    if (!isValidKey(extractKey(request, true))) {
+      set.status = 401;
+      set.headers["cache-control"] = "no-store";
+      return { status: "error", code: 401, message: "Unauthorized" };
+    }
     set.headers["content-type"] = "text/html; charset=utf-8";
+    set.headers["cache-control"] = "no-store";
     const qr1 = client1.qrCode;
     const qr2 = client2.qrCode;
+    const [img1, img2] = await Promise.all([
+      qr1 ? QRCode.toDataURL(qr1, { width: 300 }) : null,
+      qr2 ? QRCode.toDataURL(qr2, { width: 300 }) : null,
+    ]);
     
     if (!qr1 && !qr2) {
       return `<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#111;color:#eee;">
@@ -106,33 +134,24 @@ const app = new Elysia()
         <div style="display:flex;justify-content:center;gap:40px;flex-wrap:wrap;margin-top:20px;">
           <div>
             <h3>Client 1 (Main Account)</h3>
-            ${qr1 ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr1)}" style="border:10px solid white;border-radius:10px;" />` : '<p style="color:#4CAF50;font-weight:bold;">✅ Client 1 Terhubung (Connected)</p>'}
+            ${img1 ? `<img src="${img1}" style="border:10px solid white;border-radius:10px;" />` : '<p style="color:#4CAF50;font-weight:bold;">✅ Client 1 Terhubung (Connected)</p>'}
           </div>
           <div>
             <h3>Client 2 (Secondary Account)</h3>
-            ${qr2 ? `<img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qr2)}" style="border:10px solid white;border-radius:10px;" />` : '<p style="color:#4CAF50;font-weight:bold;">✅ Client 2 Terhubung (Connected)</p>'}
+            ${img2 ? `<img src="${img2}" style="border:10px solid white;border-radius:10px;" />` : '<p style="color:#4CAF50;font-weight:bold;">✅ Client 2 Terhubung (Connected)</p>'}
           </div>
         </div>
       </body>
     </html>`;
   })
-  .onBeforeHandle({ as: "global" }, ({ request, set }) => {
+  .onBeforeHandle({ as: "global" }, ({ set }) => {
     // Cache-control header (replaces Express CacheMiddleware)
-    const period = 60 * 60; // 1 hour
-    if (request.method === "GET") {
-      set.headers["cache-control"] = `public, max-age=${period}`;
-    } else {
-      set.headers["cache-control"] = "no-store";
-    }
+    set.headers["cache-control"] = "no-store";
   })
   .group("/api/v1", (app) =>
     app
       .onBeforeHandle(({ request, set }) => {
-        const apiKey =
-          request.headers.get("x-api-key") ??
-          request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-
-        if (apiKey !== env.SECRET_KEY) {
+        if (!isValidKey(extractKey(request))) {
           set.status = 401;
           return { status: "error", code: 401, message: "Unauthorized" };
         }

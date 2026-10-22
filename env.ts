@@ -8,6 +8,12 @@ const EnvSchema = z.object({
   WA2_NUMBER: z.string().optional().default(""),
   DISPLAY_NAME_1: z.string().optional(),
   DISPLAY_NAME_2: z.string().optional(),
+  // Delivery pacing (defaults = original anti-ban timing)
+  WARMUP_EVERY: z.coerce.number().int().min(1).default(1),
+  SEND_DELAY_MIN_MS: z.coerce.number().int().min(0).default(3000),
+  SEND_DELAY_RANGE_MS: z.coerce.number().int().min(0).default(2000),
+  TYPING_MIN_MS: z.coerce.number().int().min(0).default(1000),
+  TYPING_MAX_MS: z.coerce.number().int().min(0).default(3000),
   CATU_CRON_URL: z.string().url().optional().default("https://apps.catu.id/CATUJavaProd/rest/cronparamsromo"),
 });
 

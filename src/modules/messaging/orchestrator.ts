@@ -2,6 +2,7 @@ import { existsSync, unlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
+import env from "../../../env";
 import logger from "../../helper/logger";
 import {
     generateWarmupMessage,
@@ -51,6 +52,7 @@ function weightedMessageCount(): number {
 // Ensures only one orchestration runs at a time.
 
 let queue: Promise<void> = Promise.resolve();
+let deliveryCount = 0;
 
 function enqueue(fn: () => Promise<void>): void {
   queue = queue.then(fn).catch((err) => {
@@ -95,7 +97,10 @@ export abstract class Orchestrator {
     );
 
     try {
-      const isWa2Ready = wa2.client && (wa2.client as any).info;
+      // Warm-up runs on every WARMUP_EVERY-th delivery (1 = every message).
+      const warmupDue = deliveryCount++ % env.WARMUP_EVERY === 0;
+      const isWa2Ready =
+        warmupDue && wa2.client && (wa2.client as any).info;
 
       // ── Phase 1: WA2 → WA1 warm-up ──
       const warmup1Count = isWa2Ready ? weightedMessageCount() : 0;
@@ -113,7 +118,7 @@ export abstract class Orchestrator {
             logger.info(
               `[${traceId}] Phase 1 [${i + 1}/${warmup1Count}]: "${msg}"`,
             );
-            await wa2.sendMsg(msg, wa2.partnerNumber);
+            await wa2.sendMsg(msg, wa2.partnerNumber, true);
             phase1Success++;
           } catch (e: any) {
             logger.warn(`[${traceId}] Phase 1 warm-up skipped: ${e?.message?.split('\n')[0]}`);
@@ -126,7 +131,7 @@ export abstract class Orchestrator {
           await wa1.markAsRead(wa2.partnerNumber);
         }
       } else {
-        logger.info(`[${traceId}] Phase 1: Skipped (${isWa2Ready ? "organic variance" : "WA2 not ready"})`);
+        logger.info(`[${traceId}] Phase 1: Skipped (${isWa2Ready ? "organic variance" : "not due / WA2 not ready"})`);
       }
 
       // ── Phase 2: WA1 → WA2 reply ──
@@ -145,7 +150,7 @@ export abstract class Orchestrator {
             logger.info(
               `[${traceId}] Phase 2 [${i + 1}/${warmup2Count}]: "${msg}"`,
             );
-            await wa1.sendMsg(msg, wa1.partnerNumber);
+            await wa1.sendMsg(msg, wa1.partnerNumber, true);
             phase2Success++;
           } catch (e: any) {
             logger.warn(`[${traceId}] Phase 2 warm-up skipped: ${e?.message?.split('\n')[0]}`);
@@ -158,7 +163,7 @@ export abstract class Orchestrator {
           await wa2.markAsRead(wa1.partnerNumber);
         }
       } else {
-        logger.info(`[${traceId}] Phase 2: Skipped (${isWa2Ready ? "organic variance" : "WA2 not ready"})`);
+        logger.info(`[${traceId}] Phase 2: Skipped (${isWa2Ready ? "organic variance" : "not due / WA2 not ready"})`);
       }
 
 
