@@ -7,6 +7,7 @@ services:
     env_file: .env
     environment:
       NODE_ENV: production
+      PORT: "3000"   # port inside the container; the host port is set by PORT in .env
     volumes:
       - ./.wwebjs_auth:/app/.wwebjs_auth
       - ./logs:/app/logs
