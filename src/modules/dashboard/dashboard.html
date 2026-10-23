@@ -163,6 +163,9 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const KEY_STORE = "wagate_key";
+  // Works at the site root (/dashboard) and behind a reverse-proxy prefix
+  // (e.g. /wagate/dashboard): all API calls are made relative to that prefix.
+  const BASE = location.pathname.replace(/\/dashboard\/?$/, "");
   const PAGE = 300; // rows rendered per list before "tampilkan lebih"
 
   let key = null;
@@ -192,7 +195,7 @@
   }
 
   async function api(path, options = {}) {
-    const res = await fetch("/api/v1/groups" + path, {
+    const res = await fetch(BASE + "/api/v1/groups" + path, {
       ...options,
       headers: { "x-api-key": key, "content-type": "application/json", ...(options.headers || {}) },
     });
@@ -322,7 +325,7 @@
       abort = new AbortController();
       try {
         setLive("connecting");
-        const res = await fetch("/api/v1/groups/invite/stream", { headers: { "x-api-key": key }, signal: abort.signal });
+        const res = await fetch(BASE + "/api/v1/groups/invite/stream", { headers: { "x-api-key": key }, signal: abort.signal });
         if (res.status === 401) { logout("API key salah."); return; }
         if (!res.ok || !res.body) throw new Error("HTTP " + res.status);
         setLive("live"); wait = 1000;
