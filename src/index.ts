@@ -1,32 +1,16 @@
 import { cron } from "@elysiajs/cron";
-import { timingSafeEqual } from "node:crypto";
 import { Elysia } from "elysia";
 import QRCode from "qrcode";
 
 import env from "../env";
 import logger from "./helper/logger";
+import { extractKey, isAdminKey, resolveCaller } from "./lib/auth";
 import { dashboard } from "./modules/dashboard";
 import { groups } from "./modules/groups";
 import { resumeInvites } from "./modules/groups/service";
 import { messaging } from "./modules/messaging";
 import { loggerPlugin } from "./plugins/logger";
-import { client1, client2, wagatePlugin } from "./plugins/wagate";
-
-// ─── Auth helper ────────────────────────────────────────────────
-const secretBuf = Buffer.from(env.SECRET_KEY);
-function isValidKey(candidate: string | null | undefined): boolean {
-  if (!candidate) return false;
-  const buf = Buffer.from(candidate);
-  return buf.length === secretBuf.length && timingSafeEqual(buf, secretBuf);
-}
-
-function extractKey(request: Request, allowQuery = false): string | null {
-  const header =
-    request.headers.get("x-api-key") ??
-    request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (header) return header;
-  return allowQuery ? new URL(request.url).searchParams.get("key") : null;
-}
+import { client1, client2, projectSenders, wagatePlugin } from "./plugins/wagate";
 
 // ─── Main Application ───────────────────────────────────────────
 const app = new Elysia()
@@ -40,6 +24,10 @@ const app = new Elysia()
         logger.info("[cleanup] 🧹 Monthly cleanup: clearing WA1↔WA2 chats...");
         await client1.clearChat(env.WA2_NUMBER);
         await client2.clearChat(env.WA1_NUMBER);
+        for (const sender of projectSenders.clients.values()) {
+          await sender.clearChat(client2.phoneNumber);
+          await client2.clearChat(sender.phoneNumber);
+        }
         logger.info("[cleanup] ✅ Monthly cleanup complete");
       },
     }),
@@ -106,45 +94,47 @@ const app = new Elysia()
   })
   .use(dashboard)
   .get("/qr", async ({ request, set }) => {
-    if (!isValidKey(extractKey(request, true))) {
+    if (!isAdminKey(extractKey(request, true))) {
       set.status = 401;
       set.headers["cache-control"] = "no-store";
       return { status: "error", code: 401, message: "Unauthorized" };
     }
     set.headers["content-type"] = "text/html; charset=utf-8";
     set.headers["cache-control"] = "no-store";
-    const qr1 = client1.qrCode;
-    const qr2 = client2.qrCode;
-    const [img1, img2] = await Promise.all([
-      qr1 ? QRCode.toDataURL(qr1, { width: 300 }) : null,
-      qr2 ? QRCode.toDataURL(qr2, { width: 300 }) : null,
-    ]);
-    
-    if (!qr1 && !qr2) {
+    const slots = [
+      { label: "Client 1 (Main Account)", client: client1 },
+      { label: "Client 2 (Pendamping Warm-up)", client: client2 },
+      ...[...projectSenders.clients].map(([id, client]) => ({ label: `Project: ${id}`, client })),
+    ];
+    const imgs = await Promise.all(
+      slots.map((s) => (s.client.qrCode ? QRCode.toDataURL(s.client.qrCode, { width: 300 }) : null)),
+    );
+
+    if (!imgs.some(Boolean)) {
       return `<!DOCTYPE html><html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#111;color:#eee;">
         <h2>Status QR WhatsApp</h2>
         <p style="color:#aaa;">Belum ada QR Code (mungkin bot sudah terhubung / connected).</p>
       </body></html>`;
     }
-    
+
+    const cards = slots
+      .map(
+        (s, i) => `<div>
+            <h3>${s.label}</h3>
+            ${imgs[i] ? `<img src="${imgs[i]}" style="border:10px solid white;border-radius:10px;" />` : `<p style="color:#4CAF50;font-weight:bold;">✅ Terhubung (${s.client.phoneNumber || "connected"})</p>`}
+          </div>`,
+      )
+      .join("");
+
     return `<!DOCTYPE html><html>
       <head>
         <title>Scan QR WhatsApp Gateway</title>
         <meta http-equiv="refresh" content="5">
       </head>
       <body style="font-family:sans-serif;text-align:center;padding:30px;background:#111;color:#eee;">
-        <h2>Scan QR Code WhatsApp Gateway (Dual-Client Anti-Ban)</h2>
+        <h2>Scan QR Code WhatsApp Gateway</h2>
         <p style="color:#aaa;font-size:14px;">Halaman ini akan diperbarui otomatis setiap 5 detik.</p>
-        <div style="display:flex;justify-content:center;gap:40px;flex-wrap:wrap;margin-top:20px;">
-          <div>
-            <h3>Client 1 (Main Account)</h3>
-            ${img1 ? `<img src="${img1}" style="border:10px solid white;border-radius:10px;" />` : '<p style="color:#4CAF50;font-weight:bold;">✅ Client 1 Terhubung (Connected)</p>'}
-          </div>
-          <div>
-            <h3>Client 2 (Secondary Account)</h3>
-            ${img2 ? `<img src="${img2}" style="border:10px solid white;border-radius:10px;" />` : '<p style="color:#4CAF50;font-weight:bold;">✅ Client 2 Terhubung (Connected)</p>'}
-          </div>
-        </div>
+        <div style="display:flex;justify-content:center;gap:40px;flex-wrap:wrap;margin-top:20px;">${cards}</div>
       </body>
     </html>`;
   })
@@ -155,9 +145,15 @@ const app = new Elysia()
   .group("/api/v1", (app) =>
     app
       .onBeforeHandle(({ request, set }) => {
-        if (!isValidKey(extractKey(request))) {
+        const caller = resolveCaller(extractKey(request));
+        if (!caller) {
           set.status = 401;
           return { status: "error", code: 401, message: "Unauthorized" };
+        }
+        // A project key may only send; groups/invites stay admin-only.
+        if (!caller.admin && !/\/api\/v1\/send(\/|$)/.test(new URL(request.url).pathname)) {
+          set.status = 403;
+          return { status: "error", code: 403, message: "Forbidden" };
         }
       })
       .get("/", () => ({ message: "REST API is working" }))
@@ -204,6 +200,14 @@ if (env.DRY_RUN) logger.warn("🧪 DRY_RUN=true — NO messages will be sent to 
     if (client1.partnerNumber) await client1.saveContact(client1.partnerNumber);
     if (client2.partnerNumber) await client2.saveContact(client2.partnerNumber);
 
+    // Project senders start after the default pair (one Chromium each — avoids a CPU/RAM spike).
+    for (const [id, sender] of projectSenders.clients) {
+      logger.info(`[startup] Initializing project sender "${id}"...`);
+      await sender.init().catch((e) => logger.error(`[startup] Project "${id}" init error: ${e}`));
+      if (client2.phoneNumber) sender.partnerNumber = client2.phoneNumber;
+      if (sender.partnerNumber) await sender.saveContact(sender.partnerNumber);
+    }
+
     logger.info("═══════════════════════════════════════════════");
     logger.info("[startup] ✅ Both clients ready — WA-GATE is live");
     logger.info("[startup] 📅 Monthly chat cleanup: 1st of every month");
@@ -248,7 +252,7 @@ async function shutdown(signal: string) {
 
   const timeout = new Promise((resolve) => setTimeout(resolve, 20_000));
   await Promise.race([
-    Promise.allSettled([client1.client.destroy(), client2.client.destroy()]),
+    Promise.allSettled([client1, client2, ...projectSenders.clients.values()].map((c) => c.client.destroy())),
     timeout,
   ]);
 

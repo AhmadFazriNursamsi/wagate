@@ -15,6 +15,8 @@ export class WagateClient {
   client: Client;
   public qrCode: string | null = null;
   public phoneNumber: string = "";
+  /** Profile name for a project sender (production only). */
+  public displayName?: string;
   private recycling = false;
   private waitingSince = 0; // when we started waiting for a login (0 = not waiting)
   private watchdog?: ReturnType<typeof setInterval>;
@@ -163,15 +165,16 @@ export class WagateClient {
   }
 
   setupProfile() {
-    if (env.NODE_ENV === "production" && env.SETUP_PROFILE) {
-      const media = MessageMedia.fromFilePath("./logo.jpg");
-      this.client.setProfilePicture(media);
-      this.client.setDisplayName(
-        (this.clientId === "client-1"
-          ? env.DISPLAY_NAME_1
-          : env.DISPLAY_NAME_2) || "",
-      );
+    if (env.NODE_ENV !== "production" || !env.SETUP_PROFILE) return;
+    if (this.clientId.startsWith("project-")) {
+      // Project numbers keep their own photo; only a configured name is applied.
+      if (this.displayName) this.client.setDisplayName(this.displayName);
+      return;
     }
+    this.client.setProfilePicture(MessageMedia.fromFilePath("./logo.jpg"));
+    this.client.setDisplayName(
+      (this.clientId === "client-2" ? env.DISPLAY_NAME_2 : env.DISPLAY_NAME_1) || "",
+    );
   }
 
   async saveContact(number: string) {

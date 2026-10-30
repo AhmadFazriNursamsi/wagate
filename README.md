@@ -85,6 +85,27 @@ Phase 3: WA1 → Dest  (actual payload, 1-10s delay)
 
 Messages include realistic Indonesian casual texts with random emojis, occasional typos, and content fragments.
 
+## Multi-Project Senders
+
+Each project that uses the gateway can have **its own WhatsApp number** and its own API key.
+WA2 stays the shared warm-up partner, so a new project needs only **one extra number**.
+
+```bash
+bun run add-project catu "CATU"          # prints the API key once; stores only its hash
+bun run add-project catu --rotate        # issue a new key (the old one stops working)
+```
+
+1. Run `add-project` (writes `data/projects.json`, which is git-ignored and mounted at `./data`).
+2. Restart WA-GATE, open `/qr?key=<SECRET_KEY>` and scan the QR of `Project: catu` with the project's number.
+3. The project calls `/api/v1/send` and `/api/v1/send/media` with **its own key**; messages leave via its own number.
+
+- `SECRET_KEY` keeps working as the admin key (default WA1 number, dashboard, groups/invites).
+- A project key can only use `/send*`; everything else returns 403.
+- Every number has its own queue, so one project's traffic never blocks another.
+- Warm-up chats with WA2 are serialised across numbers.
+- Each number runs its own Chromium instance, so plan RAM accordingly.
+- Optional `PROJECTS_FILE` overrides the registry path (default `data/projects.json`).
+
 ## Endpoints
 
 All endpoints require authentication via one of these headers:
