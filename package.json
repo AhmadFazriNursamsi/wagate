@@ -3,10 +3,11 @@
   "description": "A type-safe dual-client WhatsApp gateway REST API built with Elysia and Bun, powered by whatsapp-web.js",
   "version": "1.1.0",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "bun test",
     "dev": "bun run --watch src/index.ts",
     "generate-key": "bun run scripts/generate-key.ts",
-    "invite": "bun run scripts/invite.ts"
+    "invite": "bun run scripts/invite.ts",
+    "add-project": "bun run scripts/add-project.ts"
   },
   "dependencies": {
     "@elysiajs/cron": "^1.4.1",

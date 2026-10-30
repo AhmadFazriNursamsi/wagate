@@ -1,5 +1,6 @@
 import { Elysia } from "elysia";
 
+import { extractKey, resolveCaller } from "../../lib/auth";
 import { wagatePlugin } from "../../plugins/wagate";
 import { messagingModel, sendMediaBody, sendTextBody, successResponse } from "./model";
 import { Orchestrator } from "./orchestrator";
@@ -14,11 +15,13 @@ import { Orchestrator } from "./orchestrator";
 
 export const messaging = new Elysia({ prefix: "/send" })
   .use(wagatePlugin)
+  // The API key decides the sender: SECRET_KEY → default number, project key → that project's number.
+  .derive(({ request }) => ({ sender: resolveCaller(extractKey(request))!.sender }))
   .use(messagingModel)
   .post(
     "/",
-    ({ body, wa1, wa2 }) => {
-      Orchestrator.dispatch(wa1, wa2, {
+    ({ body, sender, wa2 }) => {
+      Orchestrator.dispatch(sender, wa2, {
         content: body.content,
         number: body.number,
       });
@@ -49,8 +52,8 @@ export const messaging = new Elysia({ prefix: "/send" })
   )
   .post(
     "/media",
-    ({ body, wa1, wa2 }) => {
-      Orchestrator.dispatch(wa1, wa2, {
+    ({ body, sender, wa2 }) => {
+      Orchestrator.dispatch(sender, wa2, {
         content: body.content || "",
         number: body.number,
         file: body.file,
